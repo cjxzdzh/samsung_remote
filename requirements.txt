@@ -3,6 +3,7 @@
 samsungctl>=0.8.0b0
 websocket_client==0.44.0
 upnpclient==0.0.6
+netdisco>=3.0.0
 
 # Development dependencies (optional)
 mypy>=1.0.0

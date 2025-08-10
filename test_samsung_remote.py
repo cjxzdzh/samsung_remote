@@ -232,74 +232,47 @@ class TestSSDP(unittest.TestCase):
 
     def test_ssdp_response_repr(self):
         """Test SSDPResponse __repr__ method"""
-        # Create a mock HTTP response with proper bytes data
-        mock_response = MagicMock()
-        mock_response.getheader.side_effect = lambda x: {
-            'location': 'http://192.168.1.100:8001/ms/1.0/',
-            'st': 'urn:samsung.com:device:RemoteControlReceiver:1',
-            'usn': 'uuid:12345678-1234-1234-1234-123456789012',
-            'cache-control': 'max-age=1800'
-        }.get(x)
+        # Test the dataclass-based SSDPResponse
+        ssdp_response = ssdp.SSDPResponse(
+            location='http://192.168.1.100:8001/ms/1.0/',
+            st='urn:samsung.com:device:RemoteControlReceiver:1',
+            usn='uuid:12345678-1234-1234-1234-123456789012',
+            cache='1800'
+        )
         
-        # Mock the HTTPResponse to return proper data
-        with patch('helpers.ssdp.http.client.HTTPResponse') as mock_http_response:
-            mock_http_response.return_value.getheader.side_effect = lambda x: {
-                'location': 'http://192.168.1.100:8001/ms/1.0/',
-                'st': 'urn:samsung.com:device:RemoteControlReceiver:1',
-                'usn': 'uuid:12345678-1234-1234-1234-123456789012',
-                'cache-control': 'max-age=1800'
-            }.get(x)
-            
-            # Create a bytes-like object for the response
-            mock_response_bytes = b'HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.100:8001/ms/1.0/\r\nST: urn:samsung.com:device:RemoteControlReceiver:1\r\nUSN: uuid:12345678-1234-1234-1234-123456789012\r\nCACHE-CONTROL: max-age=1800\r\n\r\n'
-            
-            ssdp_response = ssdp.SSDPResponse(mock_response_bytes)
-            
-            expected = "<SSDPResponse(http://192.168.1.100:8001/ms/1.0/, urn:samsung.com:device:RemoteControlReceiver:1, uuid:12345678-1234-1234-1234-123456789012)>"
-            self.assertEqual(repr(ssdp_response), expected)
+        expected = "<SSDPResponse(http://192.168.1.100:8001/ms/1.0/, urn:samsung.com:device:RemoteControlReceiver:1, uuid:12345678-1234-1234-1234-123456789012)>"
+        self.assertEqual(repr(ssdp_response), expected)
 
-    def test_ssdp_response_no_cache_control(self):
-        """Test SSDPResponse with no cache-control header"""
-        # Create a bytes-like object for the response without cache-control
-        mock_response_bytes = b'HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.100:8001/ms/1.0/\r\nST: urn:samsung.com:device:RemoteControlReceiver:1\r\nUSN: uuid:12345678-1234-1234-1234-123456789012\r\n\r\n'
+    def test_ssdp_response_default_cache(self):
+        """Test SSDPResponse with default cache value"""
+        ssdp_response = ssdp.SSDPResponse(
+            location='http://192.168.1.100:8001/ms/1.0/',
+            st='urn:samsung.com:device:RemoteControlReceiver:1',
+            usn='uuid:12345678-1234-1234-1234-123456789012'
+        )
         
-        with patch('helpers.ssdp.http.client.HTTPResponse') as mock_http_response:
-            mock_response = MagicMock()
-            mock_response.getheader.side_effect = lambda x: {
-                'location': 'http://192.168.1.100:8001/ms/1.0/',
-                'st': 'urn:samsung.com:device:RemoteControlReceiver:1',
-                'usn': 'uuid:12345678-1234-1234-1234-123456789012',
-                'cache-control': None
-            }.get(x)
-            mock_http_response.return_value = mock_response
-            
-            ssdp_response = ssdp.SSDPResponse(mock_response_bytes)
-            
-            self.assertEqual(ssdp_response.cache, "0")
+        self.assertEqual(ssdp_response.cache, "0")
 
-    @patch('helpers.ssdp.socket.socket')
-    def test_discover_success(self, mock_socket):
+    @patch('helpers.ssdp.netdisco_ssdp.scan')
+    def test_discover_success(self, mock_scan):
         """Test discover function with successful response"""
-        # Mock socket and responses
-        mock_sock = MagicMock()
-        mock_socket.return_value = mock_sock
+        # Mock netdisco scan response
+        mock_device = MagicMock()
+        mock_device.st = 'urn:samsung.com:device:RemoteControlReceiver:1'
+        mock_device.location = 'http://192.168.1.100:8001/ms/1.0/'
+        mock_device.usn = 'uuid:12345678-1234-1234-1234-123456789012'
         
-        # Mock successful response
-        mock_response_data = b'HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.100:8001/ms/1.0/\r\nST: urn:samsung.com:device:RemoteControlReceiver:1\r\nUSN: uuid:12345678-1234-1234-1234-123456789012\r\nCACHE-CONTROL: max-age=1800\r\n\r\n'
-        mock_sock.recv.return_value = mock_response_data
-        
-        # Mock timeout after first response
-        mock_sock.recv.side_effect = [mock_response_data, socket.timeout]
+        mock_scan.return_value = [mock_device]
         
         result = ssdp.discover("urn:samsung.com:device:RemoteControlReceiver:1", timeout=1)
         
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].location, 'http://192.168.1.100:8001/ms/1.0/')
 
-    @patch('helpers.ssdp.socket.socket')
-    def test_discover_socket_error(self, mock_socket):
-        """Test discover function with socket error"""
-        mock_socket.side_effect = Exception("Socket error")
+    @patch('helpers.ssdp.netdisco_ssdp.scan')
+    def test_discover_scan_error(self, mock_scan):
+        """Test discover function with scan error"""
+        mock_scan.side_effect = Exception("Scan failed")
         
         with patch('helpers.ssdp.logging.getLogger') as mock_get_logger:
             mock_logger = MagicMock()
@@ -310,51 +283,56 @@ class TestSSDP(unittest.TestCase):
             self.assertEqual(result, [])
             mock_logger.error.assert_called()
 
-    @patch('helpers.ssdp.socket.socket')
-    def test_discover_response_error(self, mock_socket):
-        """Test discover function with response processing error"""
-        mock_sock = MagicMock()
-        mock_socket.return_value = mock_sock
+    @patch('helpers.ssdp.netdisco_ssdp.scan')
+    def test_discover_no_matching_devices(self, mock_scan):
+        """Test discover function with no matching devices"""
+        # Mock scan with non-matching device
+        mock_device = MagicMock()
+        mock_device.st = 'urn:other:device:1'
+        mock_device.location = 'http://192.168.1.100:8001/ms/1.0/'
+        mock_device.usn = 'uuid:12345678-1234-1234-1234-123456789012'
         
-        # Mock invalid response data
-        mock_sock.recv.return_value = b'invalid response data'
+        mock_scan.return_value = [mock_device]
         
-        with patch('helpers.ssdp.logging.getLogger') as mock_get_logger:
-            mock_logger = MagicMock()
-            mock_get_logger.return_value = mock_logger
-            
-            result = ssdp.discover("urn:samsung.com:device:RemoteControlReceiver:1", timeout=1)
-            
-            self.assertEqual(result, [])
-            mock_logger.warning.assert_called()
+        result = ssdp.discover("urn:samsung.com:device:RemoteControlReceiver:1", timeout=1)
+        
+        self.assertEqual(result, [])
 
-    @patch('helpers.ssdp.discover')
-    def test_scan_network_success(self, mock_discover):
+    @patch('helpers.ssdp.netdisco_ssdp.scan')
+    def test_scan_network_success(self, mock_scan):
         """Test scan_network with successful discovery"""
-        mock_response = MagicMock()
-        mock_response.location = 'http://192.168.1.100:8001/ms/1.0/'
-        mock_discover.return_value = [mock_response]
+        # Mock Samsung TV device
+        mock_device = MagicMock()
+        mock_device.st = 'urn:samsung.com:device:RemoteControlReceiver:1'
+        mock_device.location = 'http://192.168.1.100:8001/ms/1.0/'
+        mock_device.usn = 'uuid:12345678-1234-1234-1234-123456789012'
+        
+        mock_scan.return_value = [mock_device]
         
         result = ssdp.scan_network(wait=0.1)
         
         self.assertEqual(len(result), 1)
-        mock_discover.assert_called_once()
+        self.assertEqual(result[0].location, 'http://192.168.1.100:8001/ms/1.0/')
 
-    @patch('helpers.ssdp.discover')
-    def test_scan_network_no_tvs_found(self, mock_discover):
+    @patch('helpers.ssdp.netdisco_ssdp.scan')
+    def test_scan_network_no_tvs_found(self, mock_scan):
         """Test scan_network when no TVs are found"""
-        mock_discover.return_value = []
+        # Mock non-Samsung device
+        mock_device = MagicMock()
+        mock_device.st = 'urn:other:device:1'
+        mock_device.location = 'http://192.168.1.100:8001/ms/1.0/'
+        mock_device.usn = 'uuid:12345678-1234-1234-1234-123456789012'
+        
+        mock_scan.return_value = [mock_device]
         
         result = ssdp.scan_network(wait=0.1)
         
         self.assertEqual(result, [])
-        # Should be called twice due to retry logic
-        self.assertEqual(mock_discover.call_count, 2)
 
-    @patch('helpers.ssdp.discover')
-    def test_scan_network_keyboard_interrupt(self, mock_discover):
+    @patch('helpers.ssdp.netdisco_ssdp.scan')
+    def test_scan_network_keyboard_interrupt(self, mock_scan):
         """Test scan_network with keyboard interrupt"""
-        mock_discover.side_effect = KeyboardInterrupt()
+        mock_scan.side_effect = KeyboardInterrupt()
         
         with patch('helpers.ssdp.logging.getLogger') as mock_get_logger:
             mock_logger = MagicMock()
@@ -365,10 +343,10 @@ class TestSSDP(unittest.TestCase):
             self.assertEqual(result, [])
             mock_logger.info.assert_called_once()
 
-    @patch('helpers.ssdp.discover')
-    def test_scan_network_general_exception(self, mock_discover):
+    @patch('helpers.ssdp.netdisco_ssdp.scan')
+    def test_scan_network_general_exception(self, mock_scan):
         """Test scan_network with general exception"""
-        mock_discover.side_effect = Exception("Network error")
+        mock_scan.side_effect = Exception("Network error")
         
         with patch('helpers.ssdp.logging.getLogger') as mock_get_logger:
             mock_logger = MagicMock()
