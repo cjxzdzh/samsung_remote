@@ -12,7 +12,7 @@ import logging
 # Add the current directory to the path so we can import the modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from samsung_remote import getTvInfo, loadLog, main
+from samsung_remote import get_tv_info, setup_logging, main, TVConfig, TVInfo
 from helpers import tvcon, ssdp, tvinfo, macro
 
 
@@ -206,31 +206,36 @@ class TestMacro(unittest.TestCase):
     def test_execute_success(self):
         """Test successful macro execution"""
         config = {'host': '192.168.1.100', 'method': 'websocket'}
-        
+
         # Mock the CSV reader to return proper data
         mock_csv_data = [
             {'key': 'KEY_POWER', 'wait': '500'},
             {'key': 'KEY_UP', 'wait': '100'},
             {'key': 'KEY_ENTER', 'wait': '200'}
         ]
-        
-        with patch('builtins.open', mock_open()):
-            with patch('helpers.macro.csv.DictReader') as mock_csv_reader:
-                mock_csv_reader.return_value = mock_csv_data
-                with patch('helpers.macro.tvcon.send') as mock_send:
-                    macro.execute(config, 'test_macro.csv')
-                    
-                    # Should be called 3 times (one for each command)
-                    self.assertEqual(mock_send.call_count, 3)
-                    
-                    # Check the calls
-                    calls = mock_send.call_args_list
-                    self.assertEqual(calls[0][0][1], 'KEY_POWER')  # key
-                    self.assertEqual(calls[0][0][2], 500.0)        # wait
-                    self.assertEqual(calls[1][0][1], 'KEY_UP')     # key
-                    self.assertEqual(calls[1][0][2], 100.0)       # wait
-                    self.assertEqual(calls[2][0][1], 'KEY_ENTER')  # key
-                    self.assertEqual(calls[2][0][2], 200.0)       # wait
+
+        with patch('helpers.macro.Path') as mock_path:
+            mock_path.return_value.exists.return_value = True
+            mock_path.return_value.is_file.return_value = True
+            with patch('builtins.open', mock_open()):
+                with patch('helpers.macro.csv.DictReader') as mock_csv_reader:
+                    mock_csv_reader.return_value = mock_csv_data
+                    with patch('helpers.macro.tvcon.send') as mock_send:
+                        mock_send.return_value = True
+                        result = macro.execute(config, 'test_macro.csv')
+
+                        # Should be called 3 times (one for each command)
+                        self.assertEqual(mock_send.call_count, 3)
+                        self.assertTrue(result)
+                        
+                        # Check the calls
+                        calls = mock_send.call_args_list
+                        self.assertEqual(calls[0][0][1], 'KEY_POWER')  # key
+                        self.assertEqual(calls[0][0][2], 500.0)        # wait
+                        self.assertEqual(calls[1][0][1], 'KEY_UP')     # key
+                        self.assertEqual(calls[1][0][2], 100.0)       # wait
+                        self.assertEqual(calls[2][0][1], 'KEY_ENTER')  # key
+                        self.assertEqual(calls[2][0][2], 200.0)       # wait
 
     def test_execute_with_comments(self):
         """Test macro execution with comment lines"""
@@ -244,30 +249,39 @@ class TestMacro(unittest.TestCase):
             {'key': 'KEY_UP', 'wait': '100'}
         ]
         
-        with patch('builtins.open', mock_open()):
-            with patch('helpers.macro.csv.DictReader') as mock_csv_reader:
-                mock_csv_reader.return_value = mock_csv_data
-                with patch('helpers.macro.tvcon.send') as mock_send:
-                    macro.execute(config, 'test_macro.csv')
-                    
-                    # Should be called 2 times (comments should be ignored)
-                    self.assertEqual(mock_send.call_count, 2)
+        with patch('helpers.macro.Path') as mock_path:
+            mock_path.return_value.exists.return_value = True
+            mock_path.return_value.is_file.return_value = True
+            with patch('builtins.open', mock_open()):
+                with patch('helpers.macro.csv.DictReader') as mock_csv_reader:
+                    mock_csv_reader.return_value = mock_csv_data
+                    with patch('helpers.macro.tvcon.send') as mock_send:
+                        mock_send.return_value = True
+                        result = macro.execute(config, 'test_macro.csv')
+                        
+                        # Should be called 2 times (comments should be ignored)
+                        self.assertEqual(mock_send.call_count, 2)
+                        self.assertTrue(result)
 
     def test_execute_file_not_found(self):
         """Test macro execution with non-existent file"""
         config = {'host': '192.168.1.100', 'method': 'websocket'}
-        
-        with patch('builtins.open', side_effect=FileNotFoundError()):
-            with patch('helpers.macro.logging.error') as mock_logging:
-                macro.execute(config, 'nonexistent.csv')
-                mock_logging.assert_called_once()
+
+        with patch('helpers.macro.Path') as mock_path:
+            mock_path.return_value.exists.return_value = False
+            with patch('helpers.macro.logging.getLogger') as mock_get_logger:
+                mock_logger = MagicMock()
+                mock_get_logger.return_value = mock_logger
+                result = macro.execute(config, 'nonexistent.csv')
+                self.assertFalse(result)
+                mock_logger.error.assert_called_once()
 
 
 class TestSamsungRemote(unittest.TestCase):
     """Test cases for main samsung_remote module"""
 
-    def test_getTvInfo_success(self):
-        """Test getTvInfo function with successful TV info retrieval"""
+    def test_get_tv_info_success(self):
+        """Test get_tv_info function with successful TV info retrieval"""
         tvs_found = [MagicMock()]
         tvs_found[0].location = 'http://192.168.1.100:8001/ms/1.0/'
         
@@ -279,27 +293,28 @@ class TestSamsungRemote(unittest.TestCase):
             }
             
             with patch('samsung_remote.logging.info') as mock_logging:
-                result = getTvInfo(tvs_found, verbose=True)
+                result = get_tv_info(tvs_found, verbose=True)
                 
                 self.assertEqual(len(result), 1)
-                self.assertEqual(result[0]['fn'], 'Living Room TV')
+                self.assertIsInstance(result[0], TVInfo)
+                self.assertEqual(result[0].friendly_name, 'Living Room TV')
                 mock_logging.assert_called_once()
 
-    def test_loadLog_quiet_mode(self):
-        """Test loadLog function in quiet mode"""
+    def test_setup_logging_quiet_mode(self):
+        """Test setup_logging function in quiet mode"""
         with patch('samsung_remote.logging.basicConfig') as mock_basic_config:
             with patch('samsung_remote.logging.getLogger') as mock_get_logger:
                 mock_root = MagicMock()
                 mock_get_logger.return_value = mock_root
                 
-                loadLog(quiet=True)
+                setup_logging(quiet=True)
                 
                 mock_basic_config.assert_called_once()
                 # Should not add console handler in quiet mode
                 mock_root.addHandler.assert_not_called()
 
-    def test_loadLog_verbose_mode(self):
-        """Test loadLog function in verbose mode"""
+    def test_setup_logging_verbose_mode(self):
+        """Test setup_logging function in verbose mode"""
         with patch('samsung_remote.logging.basicConfig') as mock_basic_config:
             with patch('samsung_remote.logging.getLogger') as mock_get_logger:
                 with patch('samsung_remote.logging.StreamHandler') as mock_stream_handler:
@@ -308,43 +323,72 @@ class TestSamsungRemote(unittest.TestCase):
                     mock_handler = MagicMock()
                     mock_stream_handler.return_value = mock_handler
                     
-                    loadLog(quiet=False)
+                    setup_logging(quiet=False)
                     
                     mock_basic_config.assert_called_once()
                     mock_root.addHandler.assert_called_once_with(mock_handler)
 
     @patch('samsung_remote.sys.argv', ['samsung_remote.py'])
-    @patch('samsung_remote.argparse.ArgumentParser.print_help')
+    @patch('samsung_remote.parse_arguments')
+    @patch('samsung_remote.setup_logging')
+    @patch('samsung_remote.error_handler')
     @patch('samsung_remote.sys.exit')
-    @patch('samsung_remote.ssdp.scan_network')
-    @patch('samsung_remote.getTvInfo')
-    def test_main_help(self, mock_get_tv_info, mock_scan_network, mock_exit, mock_print_help):
+    def test_main_help(self, mock_exit, mock_error_handler, mock_setup_logging, mock_parse_args):
         """Test main function with no arguments (should show help)"""
-        # Mock scan_network to return a mock TV
-        mock_tv = MagicMock()
-        mock_scan_network.return_value = [mock_tv]
-        # Mock getTvInfo to return a valid TV list
-        mock_get_tv_info.return_value = [{'ip': '192.168.1.100', 'model': 'UN55F8000'}]
+        # Mock the error handler context manager
+        mock_error_handler.return_value.__enter__ = MagicMock()
+        mock_error_handler.return_value.__exit__ = MagicMock()
+        
+        # Mock the argument parser to return a namespace with print_help method
+        mock_args = MagicMock()
+        mock_args.print_help = MagicMock()
+        # Set all flags to False to prevent other code paths from executing
+        mock_args.scan = False
+        mock_args.ip = None
+        mock_args.auto = False
+        mock_args.key = None
+        mock_args.power_off_all = False
+        mock_args.macro = None
+        mock_args.quiet = False
+        mock_parse_args.return_value = mock_args
         
         main()
-        mock_print_help.assert_called_once()
+        mock_args.print_help.assert_called_once()
         mock_exit.assert_called_once_with(1)
 
     @patch('samsung_remote.sys.argv', ['samsung_remote.py', '-s'])
+    @patch('samsung_remote.parse_arguments')
+    @patch('samsung_remote.setup_logging')
+    @patch('samsung_remote.error_handler')
     @patch('samsung_remote.ssdp.scan_network')
-    @patch('samsung_remote.getTvInfo')
+    @patch('samsung_remote.get_tv_info')
     @patch('samsung_remote.sys.exit')
-    def test_main_scan(self, mock_exit, mock_get_tv_info, mock_scan_network):
+    def test_main_scan(self, mock_exit, mock_get_tv_info, mock_scan_network, mock_error_handler, mock_setup_logging, mock_parse_args):
         """Test main function with scan argument"""
+        # Mock the error handler context manager
+        mock_error_handler.return_value.__enter__ = MagicMock()
+        mock_error_handler.return_value.__exit__ = MagicMock()
+        
+        # Mock the argument parser
+        mock_args = MagicMock()
+        mock_args.scan = True
+        mock_args.ip = None
+        mock_args.auto = False
+        mock_args.key = None
+        mock_args.power_off_all = False
+        mock_args.macro = None
+        mock_args.quiet = False
+        mock_parse_args.return_value = mock_args
+        
         mock_scan_network.return_value = [MagicMock()]
         
         with patch('samsung_remote.logging.info') as mock_logging:
             main()
             
-            # scan_network is called twice - once with wait=1 and once without
-            self.assertEqual(mock_scan_network.call_count, 2)
-            # getTvInfo is called twice - once with verbose=True and once with verbose=False
-            self.assertEqual(mock_get_tv_info.call_count, 2)
+            # scan_network is called once with wait=1
+            mock_scan_network.assert_called_once_with(wait=1)
+            # get_tv_info is called once with verbose=True
+            mock_get_tv_info.assert_called_once_with([MagicMock()], True)
             mock_exit.assert_called_once_with(0)
 
     @patch('samsung_remote.sys.argv', ['samsung_remote.py', '-i', '192.168.1.100', '-k', 'KEY_POWER'])
@@ -356,16 +400,13 @@ class TestSamsungRemote(unittest.TestCase):
 
     @patch('samsung_remote.sys.argv', ['samsung_remote.py', '-p'])
     @patch('samsung_remote.ssdp.scan_network')
-    @patch('samsung_remote.getTvInfo')
+    @patch('samsung_remote.get_tv_info')
     @patch('samsung_remote.tvcon.send')
     def test_main_power_off_all(self, mock_send, mock_get_tv_info, mock_scan_network):
         """Test main function with power off all TVs argument"""
         mock_scan_network.return_value = [MagicMock()]
-        mock_get_tv_info.return_value = [{
-            'fn': 'Living Room TV',
-            'ip': '192.168.1.100',
-            'model': 'UN55F8000'
-        }]
+        mock_tv_info = TVInfo('Living Room TV', '192.168.1.100', 'UN55F8000')
+        mock_get_tv_info.return_value = [mock_tv_info]
         mock_send.return_value = True
         
         with patch('samsung_remote.logging.info') as mock_logging:
