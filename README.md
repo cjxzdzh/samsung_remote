@@ -35,19 +35,19 @@ usage: samsung_remote.py [-h] [-a | -i ip] [-k key] [-l] [-m <file>] [-p] [-q] [
 
 ```bash
 # Scan for TVs
-%(prog)s -s
+python samsung_remote.py -s
 
 # Send power command to specific TV
-%(prog)s -i 192.168.1.100 -k KEY_POWER
+python samsung_remote.py -i 192.168.1.100 -k KEY_POWER
 
 # Send volume up to first available TV
-%(prog)s -a -k KEY_VOLUP
+python samsung_remote.py -a -k KEY_VOLUP
 
 # Power off all TVs
-%(prog)s -p
+python samsung_remote.py -p
 
 # Execute macro file
-%(prog)s -m macro.csv
+python samsung_remote.py -m macro.csv
 ```
 
 ## Dependencies
