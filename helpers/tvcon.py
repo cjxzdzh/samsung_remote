@@ -27,7 +27,17 @@ def send(config: Dict[str, Any], key: str, wait_time: float = 100.0) -> bool:
     logger = logging.getLogger(__name__)
     
     try:
-        with samsungctl.Remote(config) as remote:
+        # Create samsungctl Config object
+        samsung_config = samsungctl.Config(
+            name=config.get('name', 'python remote'),
+            host=config.get('host', ''),
+            port=config.get('port', 55000),
+            method=config.get('method', 'websocket'),
+            timeout=config.get('timeout', 0)
+        )
+        
+        with samsungctl.Remote(samsung_config) as remote:
+            # Use the control method to send commands
             remote.control(key)
 
         time.sleep(wait_time / 1000.0)

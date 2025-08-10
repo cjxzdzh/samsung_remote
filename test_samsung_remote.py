@@ -163,19 +163,22 @@ class TestTVCon(unittest.TestCase):
     """Test cases for tvcon module"""
 
     @patch('helpers.tvcon.samsungctl.Remote')
-    def test_send_success(self, mock_remote):
+    @patch('helpers.tvcon.samsungctl.Config')
+    def test_send_success(self, mock_config, mock_remote):
         """Test successful send command"""
         config = {'host': '192.168.1.100', 'method': 'websocket'}
         key = 'KEY_POWER'
         
-        # Mock the context manager
+        # Mock the Config and Remote objects
+        mock_config_instance = MagicMock()
+        mock_config.return_value = mock_config_instance
         mock_remote_instance = MagicMock()
         mock_remote.return_value.__enter__.return_value = mock_remote_instance
         
         result = tvcon.send(config, key)
         
         self.assertTrue(result)
-        mock_remote.assert_called_once_with(config)
+        mock_config.assert_called_once()
         mock_remote_instance.control.assert_called_once_with(key)
 
     @patch('helpers.tvcon.samsungctl.Remote')

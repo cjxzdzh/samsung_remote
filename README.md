@@ -4,7 +4,7 @@ A Samsung TV Remote Control Python Script
 
 ## Description
 
-samsung_remote is a script written in Python that can remotely control your Samsung Smart TV through wifi. It uses the great [samsungctl](https://github.com/Ape/samsungctl) project to send the commands to TV and supports some nice features, such as:
+samsung_remote is a script written in Python that can remotely control your Samsung Smart TV through wifi. It uses the great [samsungctl](https://github.com/kdschlosser/samsungctl) project to send the commands to TV and supports some nice features, such as:
 
 - scan the network to find all available TV's;
 - turn off all the TV's with one command;
@@ -53,7 +53,7 @@ python samsung_remote.py -m macro.csv
 ## Dependencies
 
 - Python 3.7 or higher
-- [samsungctl](https://github.com/Ape/samsungctl)
+- [samsungctl](https://github.com/kdschlosser/samsungctl) (v0.8.0+)
 - `websocket-client`
 
 You can install the dependencies running:
@@ -136,6 +136,39 @@ The codebase has been refactored to improve:
 - **Documentation**: Enhanced inline documentation and examples
 - **Error Handling**: Consistent error handling with context managers
 - **Configuration**: Dataclass-based configuration management
+
+## Updated samsungctl Library
+
+This project has been updated to use the latest version of [samsungctl](https://github.com/kdschlosser/samsungctl) (v0.8.0+), which includes:
+
+- **Improved Power Key Handling**: The library now provides three distinct power commands:
+  - `KEY_POWER`: Toggle power (turns TV on if off, off if on)
+  - `KEY_POWERON`: Discrete power on (always turns TV on)
+  - `KEY_POWEROFF`: Discrete power off (always turns TV off)
+- **Enhanced TV Support**: Better support for H and J model year (2014-2015) TVs
+- **Improved API**: More consistent and reliable command interface
+- **Better Error Handling**: Enhanced error messages and connection handling
+
+### Power Command Changes
+
+The updated library provides more precise control over TV power states:
+
+```bash
+# Toggle power (recommended for most use cases)
+python samsung_remote.py -i 192.168.1.100 -k KEY_POWER
+
+# Turn TV on specifically
+python samsung_remote.py -i 192.168.1.100 -k KEY_POWERON
+
+# Turn TV off specifically  
+python samsung_remote.py -i 192.168.1.100 -k KEY_POWEROFF
+```
+
+## Examples
+
+See the [`examples/`](examples/) directory for additional example scripts demonstrating various features:
+
+- **Power Commands Demo**: [`examples/power_commands_example.py`](examples/power_commands_example.py) - Demonstrates the three different power commands (KEY_POWER, KEY_POWERON, KEY_POWEROFF)
 
 ## References
 

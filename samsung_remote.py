@@ -20,10 +20,6 @@ from helpers import tvcon, macro, ssdp, tvinfo
 class TVConfig:
     """Configuration for Samsung TV connection."""
     name: str = 'python remote'
-    ip: str = '10.0.1.2'
-    mac: str = '00-AB-11-11-11-11'
-    description: str = 'samsungctl'
-    id: str = 'PC'
     host: str = ''
     port: int = 55000
     method: str = 'websocket'
@@ -234,14 +230,28 @@ def main() -> None:
             for tv in tvs:
                 config.host = tv.ip
                 config.method = tvinfo.getMethod(tv.model)
-                if tvcon.send(config, 'KEY_POWEROFF'):
+                config_dict = {
+                    'name': config.name,
+                    'host': config.host,
+                    'port': config.port,
+                    'method': config.method,
+                    'timeout': config.timeout
+                }
+                if tvcon.send(config_dict, 'KEY_POWEROFF'):
                     logging.info(f'Successfully turned off {tv.friendly_name}')
                 else:
                     logging.error(f'Failed to turn off {tv.friendly_name}')
         
         # Handle single command
         if args.key:
-            tvcon.send(config, args.key)
+            config_dict = {
+                'name': config.name,
+                'host': config.host,
+                'port': config.port,
+                'method': config.method,
+                'timeout': config.timeout
+            }
+            tvcon.send(config_dict, args.key)
         
         # Handle macro execution
         if args.macro:
@@ -249,7 +259,14 @@ def main() -> None:
             if not macro_path.exists():
                 logging.error(f'Macro file not found: {args.macro}')
                 sys.exit(1)
-            macro.execute(config, str(macro_path))
+            config_dict = {
+                'name': config.name,
+                'host': config.host,
+                'port': config.port,
+                'method': config.method,
+                'timeout': config.timeout
+            }
+            macro.execute(config_dict, str(macro_path))
 
 
 if __name__ == "__main__":

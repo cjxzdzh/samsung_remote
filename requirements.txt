@@ -1,4 +1,6 @@
-samsungctl==0.7.0
+# Install the latest samsungctl from GitHub for updated API
+# pip install git+https://github.com/kdschlosser/samsungctl.git
+samsungctl>=0.8.0b0
 websocket_client==0.44.0
 upnpclient==0.0.6
 
